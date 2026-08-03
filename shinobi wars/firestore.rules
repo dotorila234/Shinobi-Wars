@@ -1,0 +1,57 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function estaConectado() {
+      return request.auth != null;
+    }
+
+    function rolPropio() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function esDueno() {
+      return estaConectado() && rolPropio() == 'owner';
+    }
+
+    function esStaff() {
+      return estaConectado() && (rolPropio() == 'owner' || rolPropio() == 'gm');
+    }
+
+    match /meta/counter {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if estaConectado() && request.auth.uid == userId;
+      allow update: if esDueno();
+      allow delete: if false;
+    }
+
+    match /characters/{charId} {
+      allow read: if estaConectado();
+      allow create: if estaConectado() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if estaConectado() &&
+        (resource.data.ownerId == request.auth.uid || esStaff());
+    }
+
+    match /navpages/{pageId} {
+      allow read: if true;
+      allow write: if esDueno();
+    }
+
+    match /anuncios/{postId} {
+      allow read: if estaConectado();
+      allow create: if esStaff();
+      allow update, delete: if esStaff();
+    }
+
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if esDueno();
+    }
+  }
+}
