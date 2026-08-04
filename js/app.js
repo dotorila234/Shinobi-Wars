@@ -99,7 +99,7 @@ function blocksToHtml(blocks) {
 let editorBlocks = [];
 
 function isOwner() { return state.profile?.role === "owner"; }
-function isStaff() { return state.profile?.role === "owner" || state.profile?.role === "gm"; }
+function isStaff() { return isOwner() || state.profile?.role === "gm"; }
 
 function escapeHtml(str) {
   if (str === undefined || str === null) return "";
@@ -270,7 +270,10 @@ function renderSidebar() {
     <button class="sidebar-item ${state.view === "admin-nav" ? "active" : ""}" data-fixed="admin-nav">Apartados</button>
     <button class="sidebar-item ${state.view === "admin-users" ? "active" : ""}" data-fixed="admin-users">Usuarios</button>
     <button class="sidebar-item ${state.view === "admin-theme" ? "active" : ""}" data-fixed="admin-theme">Apariencia</button>
-  ` : "";
+  ` : (isStaff() ? `
+    <div class="divider"><span class="mark">◆</span></div>
+    <button class="sidebar-item ${state.view === "admin-users" ? "active" : ""}" data-fixed="admin-users">Usuarios</button>
+  ` : "");
 
   sidebarEl.innerHTML = fixedTop + dynamicHtml + adminHtml;
 
@@ -522,14 +525,16 @@ async function renderAdminNav() {
 async function renderAdminUsers() {
   mainEl.innerHTML = `<p class="empty-note">Cargando...</p>`;
   const users = await listAllUsers();
+  const canManage = isOwner();
   mainEl.innerHTML = `
     <div class="page">
       <h2>Gestión de usuarios</h2>
+      ${!canManage ? `<p class="empty-note">Puedes ver quién es quién, pero solo el Dueño puede cambiar rangos.</p>` : ""}
       <div class="admin-list">
         ${users.map(u => `
           <div class="admin-row">
             <span>${escapeHtml(u.username)} ${u.role === "owner" ? '<span class="badge-gm">DUEÑO</span>' : u.role === "gm" ? '<span class="badge-gm">GM</span>' : ""}</span>
-            ${u.role !== "owner" ? `
+            ${canManage && u.role !== "owner" ? `
               <span class="admin-row-actions">
                 ${u.role === "gm"
                   ? `<button class="secondary" data-demote="${u.uid}">Quitar GM</button>`
@@ -540,6 +545,7 @@ async function renderAdminUsers() {
       </div>
     </div>
   `;
+  if (!canManage) return;
   mainEl.querySelectorAll("[data-promote]").forEach(btn => {
     btn.onclick = async () => { await setUserRole(btn.dataset.promote, "gm"); toast("Usuario ascendido a GM."); renderAdminUsers(); };
   });
